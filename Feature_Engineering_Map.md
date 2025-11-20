@@ -157,3 +157,110 @@ Veri kalitesi ve anomali tespiti:
 - **Takvim**: Mevsimsellik ve yıl sonu etkilerini modele vermek için
 
 **Başla:** Lag + Rolling + EOL Urgency + Tarih özellikleri ile. Sonra diğerlerini ekle.
+
+
+
+Oluşturduğun Feature Engineering haritası oldukça kapsamlı ve projenin temel dinamiklerini (özellikle Phase-Out durumunu) yakalamak için çok iyi bir başlangıç noktası. Temel yapı taşlarını doğru kurmuşsun.
+
+Ancak, bu bir yarışma (Datathon) olduğu için ve hedef 12 aylık (uzun vadeli) bir tahmin olduğu için, listende kritik bazı düzeltmelere ve eklemelere ihtiyacın var.
+
+Aşağıda senin listeni "Onaylananlar", "Düzeltilmesi Gerekenler (Riskli Alanlar)" ve "Eksik Olanlar (Game Changer)" olarak 3 başlıkta inceledim.
+
+1. ✅ Onaylananlar (Bunlar Aynen Kalsın)
+Senin listendeki şu kısımler gayet mantıklı ve kesinlikle kalmalı:
+
+Phase-Out / Lifecycle Özellikleri: months_until_eol, eol_urgency, life_progress. Bu yarışmanın kilit noktası burası. Modelin ürünün öleceğini anlamasının tek yolu bu.
+
+Tarihsel Özellikler: month, quarter. Mevsimselliği yakalamak için şart.
+
+Rolling Mean/Std: Volatiliteyi ve trendi yakalamak için gerekli.
+
+2. ⚠️ Düzeltilmesi Gerekenler (Kritik Uyarılar)
+Burada Data Leakage (Veri Sızıntısı) ve Tahmin Ufku (Forecast Horizon) ile ilgili ciddi riskler var.
+
+A. Lag Özellikleri ve 12 Ay Sorunu
+Senin Önerin: lag_1, lag_3 Sorun: Senden 12 aylık toplu tahmin isteniyor.
+
+Kasım 2024'ü tahmin ederken Ekim 2024 verisine (lag_1) sahipsin.
+
+Ancak Mart 2025'i tahmin ederken elinde Şubat 2025'in gerçek verisi olmayacak.
+
+Çözüm: Eğer "Recursive" (döngüsel) bir tahmin yapmayacaksan (ki yarışmalarda genelde Direct strategy daha stabildir), senin en güvenilir Lag özelliğin lag_12 ve üzeridir.
+
+Öneri: lag_1 yerine lag_12, lag_13, lag_14... lag_24'e odaklan. lag_1'i kullanacaksan, tahmin stratejinin recursive (tahmin ettiğini input olarak verip bir sonraki ayı tahmin etme) olması gerekir.
+
+B. Target Encoding Sızıntısı
+Senin Önerin: train.groupby('market')['quantity'].transform('mean') Sorun: Bu işlem tüm veriyi (gelecek dahil) ortalamaya katar. Model eğitimi sırasında validasyon setindeki veriyi de görüp öğrenir (Overfitting). Çözüm: Bu özellikleri hesaplarken sadece geçmiş veriyi kullanmalısın.
+
+Öneri: expanding().mean() kullan veya shift() ettikten sonra ortalama al.
+
+Doğrusu: train.groupby('market')['quantity'].shift(1).rolling(window=12).mean() (Son 12 ayın pazar ortalaması).
+
+3. 🚀 Eksik Olanlar (Game Changer Eklentiler)
+Listene şu özellikleri eklemen modelin başarısını ciddi oranda artıracaktır:
+
+A. Hiyerarşik İlişki Özellikleri (Consistency için)
+Yarışma açıklamasında "Line/Category seviyesinde tutarlılık" istenmiş. Modelin ürünün ait olduğu grubun performansını bilmesi lazım.
+
+Ratio to Category: Ürünün, kategorisindeki payı nedir?
+
+Formül: Ürün_Satışı / Kategori_Toplam_Satışı
+
+Ratio to Market: Ürünün o pazardaki gücü nedir?
+
+Neden Önemli? Bazı ürünler genel düşüşte olsa bile, kategori içinde "Yıldız Ürün" olabilir ve düşüşü daha yavaş olabilir.
+
+B. EOL Etkileşim Özellikleri (Interaction Features)
+Modelin "Phase-out" ürünlerde mevsimselliği (seasonality) görmezden gelmesini sağlamalısın.
+
+Damped Seasonality: EOL yaklaştıkça geçmiş yılın etkisini azalt.
+
+Formül: lag_12 * eol_urgency (Eğer urgency yüksekse yani EOL yakınsa, lag_12'nin etkisi değişecektir).
+
+Decay Factor: Üretim bitiş tarihinden sonraki aylar için "0" sinyalini güçlendirecek bir flag.
+
+is_post_eol: Tarih > end_production_date ise 1, değilse 0.
+
+C. Kesikli Satış (Intermittent Demand) Özellikleri
+Bazı ürünler her ay satmaz.
+
+Months Since Last Sale: Son satıştan bu yana geçen ay sayısı.
+
+Sale Frequency: Son 12 ayda kaç ay satış yapıldı? (Örn: 12 ayın 4'ünde satış varsa 0.33).
+
+4. 🛠️ Revize Edilmiş Feature Listesi (Kodlanabilir Hali)
+Senin feature haritanı şu şekilde güncellersek çok daha güçlü olur:
+
+Python
+
+# 1. ÖNCE GRID OLUŞTURMA (Çok Önemli)
+# Train verisinde olmayan (satış olmayan) aylar için satır oluşturup quantity=0 basmalısın.
+# Market x Product x Date kombinasyonlarını tamamla. Yoksa Lag'lerin yanlış hesaplanır.
+
+# 2. ZAMAN SERİSİ (Shift edilmiş!)
+# 12 aylık tahmin için 12 ay öncesine gidiyoruz
+df['lag_12'] = df.groupby(['market', 'product'])['quantity'].shift(12)
+df['lag_13'] = df.groupby(['market', 'product'])['quantity'].shift(13)
+df['roll_mean_12_24'] = df.groupby(['market', 'product'])['quantity'].transform(lambda x: x.shift(12).rolling(12).mean())
+
+# 3. LIFECYCLE (Phase-Out Odaklı)
+# Ürün yaşam döngüsünün neresinde?
+df['months_to_eol'] = (df['end_date'] - df['date']).dt.days / 30
+df['is_eol_approaching'] = (df['months_to_eol'] < 6).astype(int) # Son 6 ay mı?
+df['eol_decay_factor'] = df['months_to_eol'].apply(lambda x: 0 if x < 0 else (x/12 if x < 12 else 1)) 
+# Not: eol_decay_factor'ı lag özellikleriyle çarpıp yeni feature üretebilirsin.
+
+# 4. HİYERARŞİ (Oransal Özellikler)
+# Önce kategori toplamlarını hesapla, sonra merge et
+cat_sum = df.groupby(['category', 'date'])['quantity'].sum().rename('cat_total')
+df = df.merge(cat_sum, on=['category', 'date'], how='left')
+df['sku_share_in_cat'] = df['quantity'] / (df['cat_total'] + 1) # 0 bölme hatası için +1
+# DİKKAT: Bu özelliklerde de shift(12) kullanmalısın çünkü gelecekteki kategori toplamını bilmiyorsun!
+
+# 5. STATİK ÖZELLİKLER (Target Encoding)
+# Kategori veya Marka bazlı ortalama satış (Sadece eğitim verisinden öğrenilmeli!)
+# Bunu train/test split yaptıktan sonra sadece train üzerinden hesaplayıp map'lemek en güvenlisidir.
+Sonuç ve Tavsiye
+Senin hazırladığın liste %70 oranında doğru ve yeterli. Ancak %30'luk kısım (Lag-12 kullanımı ve Leakage önleme) yarışmayı kazandıracak olan kısımdır.
+
+Sıradaki Adımın: Önce veri setindeki eksik ayları (sıfır satışları) dolduracak bir "Skeleton" (İskelet) yapı oluştur. Bu olmadan shift veya rolling yaparsan, zaman serisi kayar ve özelliklerin bozulur. İstersen iskelet oluşturma kodunu yazabilirim?
