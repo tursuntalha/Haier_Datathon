@@ -1,95 +1,190 @@
-**Goal / Purpose**
-The goal of this datathon is to develop a robust forecasting solution that can generate 12-month demand forecasts for Haier Europe’s product portfolio, both at SKU level and at product line level.
+# 🏆 Haier Datathon - Talep Tahmini Projesi
 
-What we expect from participants:
+Bu proje, [Kaggle Haier Datathon] yarışması için geliştirilmiş bir talep tahmin (demand forecasting) çözümüdür. Ürün yaşam döngüsü (lifecycle) özelliklerini kullanarak gelecek aylardaki satış miktarlarını tahmin eder.
 
-12-Month Horizon: All models should produce a forecast horizon of 12 months (monthly frequency, fixed horizon).
+## 🎯 Yarışma Sonuçları
 
-SKU-Level Forecasts: Forecasts must be generated at the most granular level, i.e. per SKU. The SKU level is critical for operational and supply planning decisions.
+Bu çözüm yarışma kapsamında aşağıdaki skorları elde etmiştir:
 
-Line / Category-Level Consistency: When SKU-level forecasts are aggregated upwards (line / product family / category), the results should remain consistent, non-contradictory, and usable by business teams.
+- **Public Leaderboard**: 0.96214
+- **Private Leaderboard**: 0.95819
 
-Phase-Out Products: Within the 12-month period there will be SKUs that are being phased out / discontinued. Models are expected not to project these SKUs as if they will keep selling forever, but to recognize stock depletion and the natural decline in sales.
+## 📊 Proje Hakkında
 
-For phase-out SKUs: the model should let demand converge towards zero.
-For continuing SKUs: the model should preserve seasonality, trend, and promotion/campaign effects.
-Deployable / Business-Ready Solution: Solutions should not only aim for leaderboard score, but should be production-ready, explainable, and robust to real-world scenarios such as missing data, sudden drops, or the
+Haier Datathon yarışmasında amaç, farklı pazarlardaki ürünlerin gelecek aylardaki satış miktarlarını tahmin etmektir. Bu proje, LightGBM tabanlı bir makine öğrenmesi modeli kullanarak:
 
-# Evaluation
+- Gecikmeli (lag) özellikler
+- Hareketli ortalamalar (rolling features)
+- Ürün yaşam döngüsü özellikleri (EOL, lifecycle progress)
+- Zaman bazlı özellikler (mevsimsellik, trend)
 
-Competition Metric: Regularized WMAPE (rWMAPE)
-Definition
-The Regularized Weighted Mean Absolute Percentage Error (rWMAPE) is defined as:
+ile tahminleme yapar.
+
+### 🎯 Metrik: rWMAPE
+
+Yarışmada kullanılan metrik **Regularized Weighted Mean Absolute Percentage Error (rWMAPE)**'dir:
+
+```
+rWMAPE = (Σ|gerçek - tahmin| + λ * |Σgerçek - Σtahmin|) / (Σgerçek + γ * Σtahmin)
+```
+
+Yarışma skoru: `1 / (1 + rWMAPE)` (yüksek skor = daha iyi)
+
+## 📁 Proje Yapısı
+
+```
+haier_datathon/
+│
+├── data/                      # Veri dosyaları (Kaggle'dan indirilecek)
+│   ├── train.csv             # Eğitim verisi (geçmiş satışlar)
+│   ├── product.csv           # Ürün master verisi
+│   └── submission.csv        # Submission template
+│
+├── feature.py                # Veri temizleme ve özellik mühendisliği
+├── model.py                  # Model eğitimi ve tahmin
+├── utils.py                  # Metrik hesaplama ve yardımcı fonksiyonlar
+├── main.ipynb                # Jupyter notebook 
+│
+├── requirements.txt          # Python bağımlılıkları
+└── README.md                 # Bu dosya
+```
+
+## 🚀 Kurulum
+
+### 1. Gereksinimler
+
+- Python 3.8+
+- pip veya conda
+
+### 2. Bağımlılıkları Yükleyin
+
+```bash
+# Virtual environment oluşturun (önerilen)
+python -m venv venv
+
+# Virtual environment'ı aktif edin
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+# Bağımlılıkları yükleyin
+pip install -r requirements.txt
+```
+
+### 3. Veri Setini İndirin
+
+Kaggle'dan veri setini indirip `data/` klasörüne yerleştirin:
+
+1. [Haier Datathon] sayfasına gidin
+2. Data sekmesinden şu dosyaları indirin:
+   - `train.csv`
+   - `product.csv`
+   - `submission.csv`
+3. İndirilen dosyaları `data/` klasörüne kopyalayın
+
+## 💻 Kullanım
+
+```bash
+python main.ipynb
+```
+
+Script otomatik olarak:
+1. Veriyi yükler ve temizler
+2. Özellikleri oluşturur
+3. Modeli eğitir
+4. Tahminleri yapar
+5. `submission.csv` dosyasını oluşturur
+
+## 📦 Modüller
+
+### `feature.py`
+Veri temizleme ve özellik mühendisliği:
+- `fill_missing_values_no_drop()`: Eksik değerleri doldurur
+- `expand_grid_train_only()`: Zaman serisini genişletir
+- `add_advanced_lifecycle_features()`: Yaşam döngüsü özellikleri ekler
+
+### `model.py`
+Model eğitimi ve tahmin:
+- `prepare_features()`: Tüm özellikleri hazırlar
+- `train_model()`: LightGBM modelini eğitir
+- `train_and_predict_full()`: Tam pipeline'ı çalıştırır
+
+### `utils.py`
+Yardımcı fonksiyonlar:
+- `calculate_rwmape()`: rWMAPE metriğini hesaplar
+- `calculate_group_rwmape()`: Grup bazlı skor hesaplar
+- `prepare_submission_format()`: Submission formatına dönüştürür
+- `evaluate_model_cv()`: Cross-validation ile model değerlendirir
+
+## 🔧 Özellik Mühendisliği
+
+### 1. Lag Features (Gecikmeli Özellikler)
+```python
+lag_1, lag_2, lag_3, lag_6, lag_12  # 1, 2, 3, 6, 12 ay önceki satışlar
+```
+
+### 2. Rolling Features (Hareketli Ortalamalar)
+```python
+rolling_mean_3, rolling_mean_6, rolling_mean_12  # 3, 6, 12 aylık ortalamalar
+rolling_std_3, rolling_std_6, rolling_std_12     # 3, 6, 12 aylık standart sapmalar
+```
+
+### 3. Lifecycle Features (Yaşam Döngüsü)
+```python
+eol_urgency          # Ürün sonu yaklaşma aciliyeti
+life_progress        # Ürün yaşam döngüsü ilerlemesi (0-1)
+months_until_eol     # Ürün sonuna kalan ay sayısı
+flag_eol_passed      # Ürün sonu geçti mi?
+```
+
+### 4. Time Features (Zaman Özellikleri)
+```python
+month, quarter       # Ay ve çeyrek
+month_sin, month_cos # Mevsimsellik için sinüs/kosinüs dönüşümü
+```
+
+## 📈 Model Detayları
+
+### LightGBM Hiperparametreleri
+
+```python
+n_estimators=200
+learning_rate=0.05
+max_depth=7
+num_leaves=31
+min_child_samples=20
+subsample=0.8
+colsample_bytree=0.8
+```
+
+### Özel Kurallar
+
+1. **EOL Geçmiş Ürünler**: Satış %90 azaltılır
+2. **EOL'a 3 Ay Kala**: Satış %50 azaltılır
+3. **Üretim Öncesi**: Satış 0 olarak işaretlenir
+
+## 📊 Sonuçlar
+
+Model çıktıları:
+- `submission.csv`: Kaggle'a yüklenecek tahmin dosyası
+- Feature importance tablosu
+- Cross-validation skorları (opsiyonel)
+
+## 🤝 Katkıda Bulunma
+
+Bu proje Haier Datathon yarışması için geliştirilmiştir. Geliştirmeler için:
+
+1. Fork edin
+2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
+3. Commit edin (`git commit -m 'Add amazing feature'`)
+4. Push edin (`git push origin feature/amazing-feature`)
+5. Pull Request açın
+
+## 📝 Lisans
+
+Bu proje eğitim amaçlıdır ve Haier Datathon yarışması kapsamında geliştirilmiştir.
 
 
 
-where:
-
-( y ) – actual (ground truth) values
-( ŷ ) – forecasted (predicted) values
-( λ ) – mass penalty coefficient (penalizes total volume mismatch)
-( γ ) – forecast mass coefficient (keeps denominator sensitive to small forecasts)
-( ε ) – small constant for numerical stability
-Metric details and a minimal score() function to test your forecasts locally are available here.
-
-Group-level Aggregation
-To handle many product or category series, the error is computed per group (e.g., per unique_code), then averaged:
-
-For each group ( g ):
-
-If both total true and predicted sums are zero → skip the group (no information).
-If total true = 0 but total predicted > 0 → assign penalty = 1.0 (forecasting where no demand exists).
-Otherwise → compute rWMAPE for that group.
-The Group-WMAPE is the arithmetic mean of all valid group errors.
-
-Scoring
-
-
-Higher is better.
-A baseline submission reproduces approximately a score of 1.0.
-Submissions performing better than the baseline will score > 1, while worse forecasts will score < 1 .
-Why Regularization?
-Standard WMAPE can be exploited by submitting extremely small (or zero) forecasts, which minimize the denominator. This metric introduces two safety regularizers:
-
-Mass-bias penalty (λ) Ensures global totals are balanced between actuals and forecasts.
-
-Zero-collapse penalty (γ) Keeps the denominator sensitive to the size of predictions, preventing “fake-low” errors.
-
-Together, these regularizations make the scoring robust, fair, and abuse-resistant across all participants.
-
-
-
-# Dataset Description
-Data
-In this competition we don’t use a single flat table, but two main data sources: (1) a time-series dataset that contains historical sales, and (2) a product master dataset that contains hierarchy and business information about each SKU. The goal is not only to predict future quantities, but also to produce consistent forecasts from SKU level up to line/category level and to correctly handle products that will phase out within the 12-month horizon. Below you can find the column descriptions and the files that will be provided.
-
-Files
-File	Description	Notes
-train.csv	Historical sales data for model training. Contains monthly sales for the last 3 years for each available market × product_code combination.	Columns: market, product_code, date, quantity. Use this file to learn seasonality, trend, market-level differences and to join with product master via product_code. Missing months for a SKU/market should be treated as zero sales unless otherwise stated.
-submission.csv	Example submission file that shows the exact format expected by the competition.	Typically contains: unique_code (combination of market-product, market-category), date, quantity. Your final submission must follow this structure and include all rows shown in submission.csv.
-Columns
-1) Sales / Transaction Data
-Column name	Description	Notes / Example
-market	Code of the market / country / region where the sale took place. If a product is sold in multiple markets, the same product appears as separate rows.	Unmasked example: IT, ES, TR
-product_code	Unique code of the sold product. This is the key column used to join with the product master data.	Unmasked example: 1111111
-date	The date on which the sale occurred. This column is the time axis used to build the forecast.	e.g. 2024-05-01
-quantity	The number of units sold for that market and product on that date. This is the target variable we want to forecast.	e.g. 15
-2) Product Master Data
-Column name	Description	Notes / Example
-product_code	Unique product code. Must match product_code in the sales data one-to-one.	Join key
-category	The category / product line the product belongs to. This is the level we refer to as “line” in the competition description.	Unmasked example: TV, Washing Machine, Tumble Dryer
-business_line_code	Code representing the business line. Used for reporting and consolidation.	Unmasked example: FS,BI
-business_line	Descriptive name of the business line. Can be shown on dashboards or in presentations.	Unmasked example: WASHING FS, WASHING BI, COOKING BI
-sector	Higher-level business unit / sector to which the product belongs. Multiple business lines can be grouped under the same sector.	Unmasked example: Washing, SDA, Cooling
-structure_code	Industrial / production classification code of the product. Aligned with the hierarchy on the ERP / PLM side.	Unmasked example: WASH-DRY 46 L, WASH-DRY 52 L
-factory	The factory where the product is manufactured. For some SKUs this can change depending on sourcing or factory changes.	Unmasked example: HAIER TECH
-brand	Brand of the product. Used to distinguish different brands under the Haier Europe umbrella.	Unmasked example: Haier, Candy, Hoover
-start_production_date	Date when the first mass production took place. Sometimes the planned start and the actual start differ.	e.g. 2023-12-15
-end_production_date	Date when production of the product is planned to stop. Sometimes the planned stop and the actual stop differ; around this period, demand is often expected to decline gradually.	e.g. 2024-12-15
-Product Hierarchy: From Business_Line_Code to SKU
-Business_Line_Code
-└─ Sector
-   └─ Business_Line
-      └─ Category
-         └─ (Category, Structure_Code) = Structure
-            └─ Product Code (SKU)
+**Not**: Veri seti Kaggle üzerinden alınmıştır ve telif hakları Haier'e aittir. Ticari kullanım için izin alınmalıdır.
