@@ -1,190 +1,166 @@
-# 🏆 Haier Datathon - Talep Tahmini Projesi
+# Haier Datathon — Demand Forecasting
 
-Bu proje, [Kaggle Haier Datathon] yarışması için geliştirilmiş bir talep tahmin (demand forecasting) çözümüdür. Ürün yaşam döngüsü (lifecycle) özelliklerini kullanarak gelecek aylardaki satış miktarlarını tahmin eder.
+<p align="left">
+  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/LightGBM-02569B?style=for-the-badge&logo=lightgbm&logoColor=white" />
+  <img src="https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white" />
+  <img src="https://img.shields.io/badge/NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white" />
+  <img src="https://img.shields.io/badge/Scikit--Learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white" />
+</p>
 
-## 🎯 Yarışma Sonuçları
+> **Public Leaderboard: `0.96214` &nbsp;|&nbsp; Private Leaderboard: `0.95819`**
 
-Bu çözüm yarışma kapsamında aşağıdaki skorları elde etmiştir:
+LightGBM-based demand forecasting solution for the **Haier Datathon** competition on Kaggle. Predicts monthly product sales quantities across markets by leveraging product lifecycle features, lag statistics, and rolling window aggregations.
 
-- **Public Leaderboard**: 0.96214
-- **Private Leaderboard**: 0.95819
+---
 
-## 📊 Proje Hakkında
+## Competition Overview
 
-Haier Datathon yarışmasında amaç, farklı pazarlardaki ürünlerin gelecek aylardaki satış miktarlarını tahmin etmektir. Bu proje, LightGBM tabanlı bir makine öğrenmesi modeli kullanarak:
+| Field | Detail |
+|---|---|
+| Competition | Haier Datathon (Kaggle) |
+| Task | Time-series demand forecasting |
+| Metric | rWMAPE → Score = `1 / (1 + rWMAPE)` |
+| Public Score | **0.96214** |
+| Private Score | **0.95819** |
 
-- Gecikmeli (lag) özellikler
-- Hareketli ortalamalar (rolling features)
-- Ürün yaşam döngüsü özellikleri (EOL, lifecycle progress)
-- Zaman bazlı özellikler (mevsimsellik, trend)
-
-ile tahminleme yapar.
-
-### 🎯 Metrik: rWMAPE
-
-Yarışmada kullanılan metrik **Regularized Weighted Mean Absolute Percentage Error (rWMAPE)**'dir:
-
-```
-rWMAPE = (Σ|gerçek - tahmin| + λ * |Σgerçek - Σtahmin|) / (Σgerçek + γ * Σtahmin)
-```
-
-Yarışma skoru: `1 / (1 + rWMAPE)` (yüksek skor = daha iyi)
-
-## 📁 Proje Yapısı
+### Metric: rWMAPE
 
 ```
-haier_datathon/
-│
-├── data/                      # Veri dosyaları (Kaggle'dan indirilecek)
-│   ├── train.csv             # Eğitim verisi (geçmiş satışlar)
-│   ├── product.csv           # Ürün master verisi
-│   └── submission.csv        # Submission template
-│
-├── feature.py                # Veri temizleme ve özellik mühendisliği
-├── model.py                  # Model eğitimi ve tahmin
-├── utils.py                  # Metrik hesaplama ve yardımcı fonksiyonlar
-├── main.ipynb                # Jupyter notebook 
-│
-├── requirements.txt          # Python bağımlılıkları
-└── README.md                 # Bu dosya
+rWMAPE = (Σ|actual - predicted| + λ · |Σactual - Σpredicted|) / (Σactual + γ · Σpredicted)
+
+Final Score = 1 / (1 + rWMAPE)   ← higher is better, max = 1.0
 ```
 
-## 🚀 Kurulum
+---
 
-### 1. Gereksinimler
+## Pipeline Architecture
 
-- Python 3.8+
-- pip veya conda
+```
+train.csv + product.csv
+        │
+        ▼
+┌──────────────────────────┐
+│   Data Cleaning          │  fill_missing_values_no_drop()
+│   Grid Expansion         │  expand_grid_train_only()
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│   Feature Engineering    │
+│   ─ Lag features         │
+│   ─ Rolling features     │
+│   ─ Lifecycle features   │
+│   ─ Time features        │
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│   LightGBM Training      │  Cross-validation + early stopping
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│   Post-processing Rules  │  EOL, pre-production, near-EOL
+└──────────┬───────────────┘
+           │
+           ▼
+      submission.csv
+```
 
-### 2. Bağımlılıkları Yükleyin
+---
+
+## Feature Engineering
+
+| Feature | Type | Description |
+|---|---|---|
+| `lag_1`, `lag_2`, `lag_3` | Lag | Sales 1–3 months ago |
+| `lag_6`, `lag_12` | Lag | Sales 6 and 12 months ago |
+| `rolling_mean_3/6/12` | Rolling | Moving average over 3/6/12 months |
+| `rolling_std_3/6/12` | Rolling | Rolling standard deviation |
+| `eol_urgency` | Lifecycle | Urgency score as product approaches end-of-life |
+| `life_progress` | Lifecycle | Product lifecycle completion ratio (0–1) |
+| `months_until_eol` | Lifecycle | Months remaining until EOL |
+| `flag_eol_passed` | Lifecycle | Binary flag: EOL date has passed |
+| `month`, `quarter` | Time | Calendar month and quarter |
+| `month_sin`, `month_cos` | Time | Cyclical encoding for seasonality |
+
+### Business Rules Applied After Prediction
+
+| Condition | Adjustment |
+|---|---|
+| Product EOL already passed | Reduce predicted sales by 90% |
+| Less than 3 months until EOL | Reduce predicted sales by 50% |
+| Product not yet in production | Set prediction to 0 |
+
+---
+
+## Model Details
+
+```python
+LGBMRegressor(
+    n_estimators=200,
+    learning_rate=0.05,
+    max_depth=7,
+    num_leaves=31,
+    min_child_samples=20,
+    subsample=0.8,
+    colsample_bytree=0.8
+)
+```
+
+---
+
+## Project Structure
+
+```
+Haier_Datathon/
+├── data/
+│   ├── train.csv          # Historical sales data
+│   ├── product.csv        # Product master (lifecycle dates, markets)
+│   └── submission.csv     # Submission template
+├── feature.py             # Data cleaning & feature engineering
+├── model.py               # Model training & prediction pipeline
+├── utils.py               # rWMAPE metric, CV evaluation, submission formatter
+├── main.ipynb             # End-to-end notebook
+└── requirements.txt
+```
+
+---
+
+## Setup & Run
 
 ```bash
-# Virtual environment oluşturun (önerilen)
+# Create virtual environment (recommended)
 python -m venv venv
+source venv/bin/activate        # Linux/macOS
+venv\Scripts\activate           # Windows
 
-# Virtual environment'ı aktif edin
-# Windows:
-venv\Scripts\activate
-# Linux/Mac:
-source venv/bin/activate
-
-# Bağımlılıkları yükleyin
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Veri Setini İndirin
+Download data from the Kaggle competition page and place `train.csv`, `product.csv`, and `submission.csv` inside the `data/` directory. Then run `main.ipynb` to generate predictions.
 
-Kaggle'dan veri setini indirip `data/` klasörüne yerleştirin:
+---
 
-1. [Haier Datathon] sayfasına gidin
-2. Data sekmesinden şu dosyaları indirin:
-   - `train.csv`
-   - `product.csv`
-   - `submission.csv`
-3. İndirilen dosyaları `data/` klasörüne kopyalayın
-
-## 💻 Kullanım
-
-```bash
-python main.ipynb
-```
-
-Script otomatik olarak:
-1. Veriyi yükler ve temizler
-2. Özellikleri oluşturur
-3. Modeli eğitir
-4. Tahminleri yapar
-5. `submission.csv` dosyasını oluşturur
-
-## 📦 Modüller
+## Key Modules
 
 ### `feature.py`
-Veri temizleme ve özellik mühendisliği:
-- `fill_missing_values_no_drop()`: Eksik değerleri doldurur
-- `expand_grid_train_only()`: Zaman serisini genişletir
-- `add_advanced_lifecycle_features()`: Yaşam döngüsü özellikleri ekler
+- `fill_missing_values_no_drop()` — imputes gaps without removing rows
+- `expand_grid_train_only()` — expands sparse time series to a full monthly grid
+- `add_advanced_lifecycle_features()` — computes EOL proximity and lifecycle stage
 
 ### `model.py`
-Model eğitimi ve tahmin:
-- `prepare_features()`: Tüm özellikleri hazırlar
-- `train_model()`: LightGBM modelini eğitir
-- `train_and_predict_full()`: Tam pipeline'ı çalıştırır
+- `prepare_features()` — assembles all lag, rolling, lifecycle, and time features
+- `train_model()` — trains LightGBM with early stopping
+- `train_and_predict_full()` — full end-to-end pipeline
 
 ### `utils.py`
-Yardımcı fonksiyonlar:
-- `calculate_rwmape()`: rWMAPE metriğini hesaplar
-- `calculate_group_rwmape()`: Grup bazlı skor hesaplar
-- `prepare_submission_format()`: Submission formatına dönüştürür
-- `evaluate_model_cv()`: Cross-validation ile model değerlendirir
+- `calculate_rwmape()` — official competition metric
+- `evaluate_model_cv()` — cross-validation scorer
+- `prepare_submission_format()` — converts predictions to submission format
 
-## 🔧 Özellik Mühendisliği
+---
 
-### 1. Lag Features (Gecikmeli Özellikler)
-```python
-lag_1, lag_2, lag_3, lag_6, lag_12  # 1, 2, 3, 6, 12 ay önceki satışlar
-```
-
-### 2. Rolling Features (Hareketli Ortalamalar)
-```python
-rolling_mean_3, rolling_mean_6, rolling_mean_12  # 3, 6, 12 aylık ortalamalar
-rolling_std_3, rolling_std_6, rolling_std_12     # 3, 6, 12 aylık standart sapmalar
-```
-
-### 3. Lifecycle Features (Yaşam Döngüsü)
-```python
-eol_urgency          # Ürün sonu yaklaşma aciliyeti
-life_progress        # Ürün yaşam döngüsü ilerlemesi (0-1)
-months_until_eol     # Ürün sonuna kalan ay sayısı
-flag_eol_passed      # Ürün sonu geçti mi?
-```
-
-### 4. Time Features (Zaman Özellikleri)
-```python
-month, quarter       # Ay ve çeyrek
-month_sin, month_cos # Mevsimsellik için sinüs/kosinüs dönüşümü
-```
-
-## 📈 Model Detayları
-
-### LightGBM Hiperparametreleri
-
-```python
-n_estimators=200
-learning_rate=0.05
-max_depth=7
-num_leaves=31
-min_child_samples=20
-subsample=0.8
-colsample_bytree=0.8
-```
-
-### Özel Kurallar
-
-1. **EOL Geçmiş Ürünler**: Satış %90 azaltılır
-2. **EOL'a 3 Ay Kala**: Satış %50 azaltılır
-3. **Üretim Öncesi**: Satış 0 olarak işaretlenir
-
-## 📊 Sonuçlar
-
-Model çıktıları:
-- `submission.csv`: Kaggle'a yüklenecek tahmin dosyası
-- Feature importance tablosu
-- Cross-validation skorları (opsiyonel)
-
-## 🤝 Katkıda Bulunma
-
-Bu proje Haier Datathon yarışması için geliştirilmiştir. Geliştirmeler için:
-
-1. Fork edin
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Commit edin (`git commit -m 'Add amazing feature'`)
-4. Push edin (`git push origin feature/amazing-feature`)
-5. Pull Request açın
-
-## 📝 Lisans
-
-Bu proje eğitim amaçlıdır ve Haier Datathon yarışması kapsamında geliştirilmiştir.
-
-
-
-**Not**: Veri seti Kaggle üzerinden alınmıştır ve telif hakları Haier'e aittir. Ticari kullanım için izin alınmalıdır.
+> Data is sourced from the Kaggle Haier Datathon competition. Copyright belongs to Haier. Commercial use requires explicit permission.
