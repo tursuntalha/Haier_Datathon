@@ -118,14 +118,35 @@ LGBMRegressor(
 ```
 Haier_Datathon/
 ├── data/
-│   ├── train.csv          # Historical sales data
-│   ├── product.csv        # Product master (lifecycle dates, markets)
-│   └── submission.csv     # Submission template
-├── feature.py             # Data cleaning & feature engineering
-├── model.py               # Model training & prediction pipeline
-├── utils.py               # rWMAPE metric, CV evaluation, submission formatter
-├── main.ipynb             # End-to-end notebook
-└── requirements.txt
+│   ├── train.csv                # Historical sales data
+│   ├── product.csv              # Product master (lifecycle dates, markets)
+│   └── submission.csv           # Submission template
+├── feature.py                   # Data cleaning & feature engineering
+├── model.py                     # Model training & prediction pipeline
+├── utils.py                     # rWMAPE metric, CV evaluation, submission formatter
+├── main.ipynb                   # End-to-end notebook
+├── requirements.txt
+│
+├── anomaly/
+│   ├── __init__.py
+│   └── anomaly_detection.py     # Item 3: 3σ outlier & zero-sales streak detection
+│
+├── probabilistic/
+│   ├── __init__.py
+│   └── quantile_forecast.py     # Item 2: LightGBM quantile regression (p10/p50/p90)
+│
+├── experiments/
+│   ├── __init__.py
+│   ├── tft_model.py             # Item 1: Temporal Fusion Transformer
+│   └── patch_tst_model.py       # Item 6: PatchTST architecture
+│
+├── api/
+│   ├── __init__.py
+│   └── forecast_api.py          # Item 5: FastAPI service
+│
+└── dashboard/
+    ├── __init__.py
+    └── dashboard.py             # Item 4: Streamlit dashboard
 ```
 
 ---
@@ -167,11 +188,11 @@ Download data from the Kaggle competition page and place `train.csv`, `product.c
 
 A 0.96+ score demonstrates that the core pipeline is solid. The next evolution takes this from a competition notebook to a production-grade forecasting system:
 
-- [ ] **Temporal Fusion Transformer (TFT)** — Replace LightGBM with TFT (PyTorch Forecasting library) for a true sequence-aware model. TFT handles multi-horizon forecasting natively and provides interpretable attention weights. Compare against LightGBM on the same CV folds.
-- [ ] **Probabilistic Forecasting** — Switch from point estimates to prediction intervals using LightGBM quantile regression (train separate models for p10, p50, p90). More useful for inventory decisions: "We're 90% confident sales will be between X and Y units."
-- [ ] **Anomaly Detection Layer** — Add a pre-processing step that flags statistically anomalous sales months (3σ outliers, zero-sales streaks) and treats them differently during training. Prevents model from learning from stockout or data entry errors.
-- [ ] **Interactive Forecasting Dashboard** — Build a Streamlit or Grafana dashboard that visualizes: actual vs predicted sales per product, forecast confidence intervals, lifecycle stage indicators, and alert flags for products approaching EOL.
-- [ ] **REST API Service** — Wrap the trained model as a FastAPI service. Input: product ID + target month. Output: predicted demand + confidence interval + EOL flag. Simulate integration with a real ERP system by calling the API from a mock order management system.
-- [ ] **PatchTST Experiment** — Test PatchTST (Patch Time Series Transformer), a recent architecture that treats time series like NLP tokens. Compare to both LightGBM and TFT on this dataset.
+- [x] **Temporal Fusion Transformer (TFT)** — Replace LightGBM with TFT (PyTorch Forecasting library) for a true sequence-aware model. TFT handles multi-horizon forecasting natively and provides interpretable attention weights. Compare against LightGBM on the same CV folds.  [`experiments/tft_model.py`](experiments/tft_model.py)
+- [x] **Probabilistic Forecasting** — Switch from point estimates to prediction intervals using LightGBM quantile regression (train separate models for p10, p50, p90). More useful for inventory decisions: "We're 90% confident sales will be between X and Y units."  [`probabilistic/quantile_forecast.py`](probabilistic/quantile_forecast.py)
+- [x] **Anomaly Detection Layer** — Add a pre-processing step that flags statistically anomalous sales months (3σ outliers, zero-sales streaks) and treats them differently during training. Prevents model from learning from stockout or data entry errors.  [`anomaly/anomaly_detection.py`](anomaly/anomaly_detection.py)
+- [x] **Interactive Forecasting Dashboard** — Build a Streamlit or Grafana dashboard that visualizes: actual vs predicted sales per product, forecast confidence intervals, lifecycle stage indicators, and alert flags for products approaching EOL.  [`dashboard/dashboard.py`](dashboard/dashboard.py)
+- [x] **REST API Service** — Wrap the trained model as a FastAPI service. Input: product ID + target month. Output: predicted demand + confidence interval + EOL flag. Simulate integration with a real ERP system by calling the API from a mock order management system.  [`api/forecast_api.py`](api/forecast_api.py)
+- [x] **PatchTST Experiment** — Test PatchTST (Patch Time Series Transformer), a recent architecture that treats time series like NLP tokens. Compare to both LightGBM and TFT on this dataset.  [`experiments/patch_tst_model.py`](experiments/patch_tst_model.py)
 
 > Data is sourced from the Kaggle Haier Datathon competition. Copyright belongs to Haier. Commercial use requires explicit permission.

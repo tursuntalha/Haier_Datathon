@@ -29,3 +29,19 @@ tqdm>=4.66.0
 # Model Evaluation & Metrics
 scikit-optimize>=0.9.0
 optuna>=3.14.0
+
+# Deep Learning (TFT & PatchTST)
+torch>=2.1.0
+pytorch-forecasting>=0.10.0
+pytorch-lightning>=2.1.0
+
+# API & Dashboard
+fastapi>=0.109.0
+uvicorn>=0.25.0
+streamlit>=1.30.0
+
+# Anomaly Detection
+scipy>=1.12.0
+
+# Model serialization
+pickle5; python_version < '3.8'
