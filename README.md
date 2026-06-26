@@ -12,6 +12,8 @@
 
 LightGBM-based demand forecasting solution for the **Haier Datathon** competition on Kaggle. Predicts monthly product sales quantities across markets by leveraging product lifecycle features, lag statistics, and rolling window aggregations.
 
+**Project Vision:** Demand forecasting at scale. The lifecycle-aware feature engineering (EOL urgency, life_progress, months_until_eol) and rWMAPE metric optimization developed here are directly applicable to supply chain and inventory management systems. Any business managing products with defined lifecycles — electronics, pharmaceuticals, fashion — faces exactly this problem. The business rules layer (post-prediction adjustments for EOL products) demonstrates how domain knowledge integrates with ML in real industrial settings.
+
 ---
 
 ## Competition Overview
@@ -131,12 +133,10 @@ Haier_Datathon/
 ## Setup & Run
 
 ```bash
-# Create virtual environment (recommended)
 python -m venv venv
 source venv/bin/activate        # Linux/macOS
 venv\Scripts\activate           # Windows
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -162,5 +162,16 @@ Download data from the Kaggle competition page and place `train.csv`, `product.c
 - `prepare_submission_format()` — converts predictions to submission format
 
 ---
+
+## Beyond the Datathon
+
+A 0.96+ score demonstrates that the core pipeline is solid. The next evolution takes this from a competition notebook to a production-grade forecasting system:
+
+- [ ] **Temporal Fusion Transformer (TFT)** — Replace LightGBM with TFT (PyTorch Forecasting library) for a true sequence-aware model. TFT handles multi-horizon forecasting natively and provides interpretable attention weights. Compare against LightGBM on the same CV folds.
+- [ ] **Probabilistic Forecasting** — Switch from point estimates to prediction intervals using LightGBM quantile regression (train separate models for p10, p50, p90). More useful for inventory decisions: "We're 90% confident sales will be between X and Y units."
+- [ ] **Anomaly Detection Layer** — Add a pre-processing step that flags statistically anomalous sales months (3σ outliers, zero-sales streaks) and treats them differently during training. Prevents model from learning from stockout or data entry errors.
+- [ ] **Interactive Forecasting Dashboard** — Build a Streamlit or Grafana dashboard that visualizes: actual vs predicted sales per product, forecast confidence intervals, lifecycle stage indicators, and alert flags for products approaching EOL.
+- [ ] **REST API Service** — Wrap the trained model as a FastAPI service. Input: product ID + target month. Output: predicted demand + confidence interval + EOL flag. Simulate integration with a real ERP system by calling the API from a mock order management system.
+- [ ] **PatchTST Experiment** — Test PatchTST (Patch Time Series Transformer), a recent architecture that treats time series like NLP tokens. Compare to both LightGBM and TFT on this dataset.
 
 > Data is sourced from the Kaggle Haier Datathon competition. Copyright belongs to Haier. Commercial use requires explicit permission.
